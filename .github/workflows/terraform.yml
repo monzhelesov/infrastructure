@@ -16,7 +16,11 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       - name: Create SA key file
-        run: echo '${{ secrets.YC_SA_KEY }}' | base64 -d > ${{ github.workspace }}/key.json
+        run: |
+          echo '${{ secrets.YC_SA_KEY }}' | base64 -d > ${{ github.workspace }}/key.json 2>/dev/null || \
+          echo '${{ secrets.YC_SA_KEY }}' > ${{ github.workspace }}/key.json
+          echo "Key file size: $(wc -c < ${{ github.workspace }}/key.json)"
+          echo "Key file start: $(head -c 20 ${{ github.workspace }}/key.json)"
 
       - name: Terraform Init
         working-directory: terraform/main
