@@ -15,6 +15,12 @@ resource "yandex_resourcemanager_folder_iam_member" "k8s_puller" {
   member    = "serviceAccount:${yandex_iam_service_account.k8s.id}"
 }
 
+resource "yandex_resourcemanager_folder_iam_member" "k8s_vpc_admin" {
+  folder_id = var.folder_id
+  role      = "vpc.admin"
+  member    = "serviceAccount:${yandex_iam_service_account.k8s.id}"
+}
+
 resource "yandex_kubernetes_cluster" "main" {
   name       = "statusboard-cluster"
   network_id = yandex_vpc_network.main.id
@@ -24,7 +30,6 @@ resource "yandex_kubernetes_cluster" "main" {
       zone      = yandex_vpc_subnet.subnets["a"].zone
       subnet_id = yandex_vpc_subnet.subnets["a"].id
     }
-
     public_ip = true
   }
 
@@ -35,7 +40,8 @@ resource "yandex_kubernetes_cluster" "main" {
 
   depends_on = [
     yandex_resourcemanager_folder_iam_member.k8s_editor,
-    yandex_resourcemanager_folder_iam_member.k8s_puller
+    yandex_resourcemanager_folder_iam_member.k8s_puller,
+    yandex_resourcemanager_folder_iam_member.k8s_vpc_admin
   ]
 }
 
