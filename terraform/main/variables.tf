@@ -14,6 +14,13 @@ variable "zone" {
 variable "token" {
   type      = string
   sensitive = true
+  default   = ""
+}
+
+variable "service_account_key_file" {
+  type      = string
+  sensitive = true
+  default   = ""
 }
 
 variable "db_password" {
