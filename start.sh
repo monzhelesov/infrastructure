@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+source "$(dirname "$0")/.env"
+GITHUB_REPO="monzhelesov/statusboard-app"
+
 echo "=== Обновляем токен ==="
 TOKEN=$(yc iam create-token)
 sed -i "s/token.*=.*/token = \"$TOKEN\"/" terraform/backend/terraform.tfvars
@@ -32,6 +35,45 @@ fi
 
 echo "=== Получаем kubeconfig ==="
 yc managed-kubernetes cluster get-credentials $CLUSTER_ID --external --force
+
+echo "=== Создаём статический kubeconfig для GitHub Actions ==="
+kubectl create serviceaccount github-actions -n kube-system --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding github-actions --clusterrole=cluster-admin --serviceaccount=kube-system:github-actions --dry-run=client -o yaml | kubectl apply -f -
+K8S_TOKEN=$(kubectl create token github-actions -n kube-system --duration=87600h)
+SERVER=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[0].cluster.server}')
+CA=$(kubectl config view --raw --minify --flatten -o jsonpath='{.clusters[0].cluster.certificate-authority-data}')
+
+KUBECONFIG_B64=$(cat << KUBEEOF | base64 -w 0
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: ${CA}
+    server: ${SERVER}
+  name: statusboard
+contexts:
+- context:
+    cluster: statusboard
+    user: github-actions
+  name: statusboard
+current-context: statusboard
+users:
+- name: github-actions
+  user:
+    token: ${K8S_TOKEN}
+KUBEEOF
+)
+
+echo "=== Обновляем KUBE_CONFIG в GitHub ==="
+PUBLIC_KEY=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  "https://api.github.com/repos/$GITHUB_REPO/actions/secrets/public-key")
+KEY_ID=$(echo $PUBLIC_KEY | jq -r '.key_id')
+
+curl -s -X PUT \
+  -H "Authorization: token $GITHUB_TOKEN" \
+  -H "Accept: application/vnd.github.v3+json" \
+  "https://api.github.com/repos/$GITHUB_REPO/actions/secrets/KUBE_CONFIG" \
+  -d "{\"encrypted_value\":\"$KUBECONFIG_B64\",\"key_id\":\"$KEY_ID\"}"
 
 echo "=== Применяем K8s манифесты ==="
 kubectl apply -f ~/diploma/k8s-config/namespaces/
