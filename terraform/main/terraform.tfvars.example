@@ -1,0 +1,5 @@
+cloud_id    = "your_cloud_id"
+folder_id   = "your_folder_id"
+zone        = "ru-central1-a"
+token       = "your_iam_token"
+db_password = "your_db_password"

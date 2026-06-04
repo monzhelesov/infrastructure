@@ -68,7 +68,6 @@ echo "=== Обновляем KUBE_CONFIG в GitHub ==="
 PUBLIC_KEY=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
   "https://api.github.com/repos/$GITHUB_REPO/actions/secrets/public-key")
 KEY_ID=$(echo $PUBLIC_KEY | jq -r '.key_id')
-
 curl -s -X PUT \
   -H "Authorization: token $GITHUB_TOKEN" \
   -H "Accept: application/vnd.github.v3+json" \
@@ -82,13 +81,34 @@ kubectl apply -f ~/diploma/k8s-config/app/frontend/
 
 echo "=== Устанавливаем мониторинг ==="
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
 helm repo update
+
+helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace \
+  --set controller.service.type=LoadBalancer
+
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
-  --set grafana.service.type=LoadBalancer \
+  --set grafana.service.type=ClusterIP \
   --set grafana.adminPassword=admin123 \
   --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
 
+echo "=== Ждём IP ingress контроллера ==="
+echo "Ожидание до 5 минут..."
+for i in $(seq 1 30); do
+  IP=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+  if [ -n "$IP" ]; then
+    echo "Ingress IP: $IP"
+    break
+  fi
+  sleep 10
+done
+
+echo "=== Применяем Ingress манифесты ==="
+kubectl apply -f ~/diploma/k8s-config/ingress/
+
 echo "=== Готово! ==="
-kubectl get svc -n statusboard
-kubectl get svc -n monitoring | grep grafana
+echo "Приложение: http://$IP"
+echo "Grafana: http://$IP/grafana"
