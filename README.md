@@ -1,16 +1,15 @@
 # Infrastructure — StatusBoard
 
-Terraform конфигурация для разворачивания StatusBoard в Yandex Cloud.
-Всё что нужно для инфраструктуры — здесь.
+Инфраструктура проекта StatusBoard на базе Yandex Cloud, управляемая через Terraform.
 
 ## Стек
 
 - Cloud: Yandex Cloud
-- IaC: Terraform с S3 backend
-- Kubernetes: Managed Kubernetes, зональный мастер, прерываемые ноды
+- IaC: Terraform (S3 backend)
+- Kubernetes: Managed Kubernetes (зональный мастер, прерываемые ноды)
 - База данных: Managed PostgreSQL 16
 - Registry: Yandex Container Registry
-- CI/CD: GitHub Actions
+- CI/CD: GitHub Actions (auto apply при коммите в main)
 
 ## Структура
 
@@ -28,16 +27,15 @@ Terraform конфигурация для разворачивания StatusBoa
 
 ## Первый запуск
 
-Bootstrap делается один раз. Он создаёт S3 bucket для хранения Terraform state
-и сервисный аккаунт. Bucket нельзя удалять — в нём живёт state основной инфраструктуры.
+Bootstrap делается один раз. Создаёт S3 bucket для хранения Terraform state и сервисный аккаунт. Bucket нельзя удалять.
 
-**Шаг 1.** Заполни `terraform/backend/terraform.tfvars`:
+**Шаг 1.** Заполни terraform/backend/terraform.tfvars:
 
     cp terraform/backend/terraform.tfvars.example terraform/backend/terraform.tfvars
 
-- `cloud_id` — ID облака: `yc config list`
-- `folder_id` — ID каталога: `yc config list`
-- `token` — IAM токен: `yc iam create-token`
+- cloud_id — ID облака: yc config list
+- folder_id — ID каталога: yc config list
+- token — IAM токен: yc iam create-token
 
 **Шаг 2.** Запусти bootstrap:
 
@@ -45,59 +43,43 @@ Bootstrap делается один раз. Он создаёт S3 bucket для
     terraform init
     terraform apply
 
-**Шаг 3.** Сохрани ключи из outputs — они нужны в следующем шаге:
+**Шаг 3.** Сохрани ключи из outputs:
 
     terraform output access_key
     terraform output secret_key
 
-**Шаг 4.** Заполни `terraform/main/terraform.tfvars`:
+**Шаг 4.** Заполни terraform/main/terraform.tfvars:
 
     cp terraform/main/terraform.tfvars.example terraform/main/terraform.tfvars
 
-- `cloud_id`, `folder_id`, `token` — те же что в bootstrap
-- `db_password` — пароль для PostgreSQL, минимум 16 символов
+- cloud_id, folder_id, token — те же что в bootstrap
+- db_password — пароль для PostgreSQL, минимум 16 символов
 
-**Шаг 5.** Вставь ключи из Шага 3 в `terraform/main/backend.tf`:
+**Шаг 5.** Вставь ключи из Шага 3 в terraform/main/backend.tf
 
-- `access_key` — значение из `terraform output access_key`
-- `secret_key` — значение из `terraform output secret_key`
-
-**Шаг 6.** Создай `.env`:
+**Шаг 6.** Создай .env:
 
     cp .env.example .env
 
-Заполни `GITHUB_TOKEN` — Personal Access Token с правом `repo`.
-Нужен чтобы скрипт автоматически обновлял `KUBE_CONFIG` в GitHub после пересоздания кластера.
+Заполни GITHUB_TOKEN — Personal Access Token с правом repo.
 
 ## Ежедневная работа
 
-IAM токен живёт 12 часов — скрипт обновляет его сам при каждом запуске.
-
-Поднять инфраструктуру:
-
-    ./start.sh
-
-Скрипт делает всё сам: обновляет токен, запускает terraform apply, получает kubeconfig,
-применяет K8s манифесты, ставит ingress-nginx и kube-prometheus, обновляет KUBE_CONFIG в GitHub.
-
-Снести инфраструктуру когда не работаешь (экономит деньги):
-
-    ./stop.sh
-
-Registry и S3 bucket остаются — только кластер, ноды и БД удаляются.
+    ./start.sh   — поднять инфраструктуру
+    ./stop.sh    — снести инфраструктуру
 
 ## Terraform CI/CD
 
-Коммит в `main` затрагивающий `terraform/main/` запускает `terraform plan` и `terraform apply` автоматически.
+Коммит в main затрагивающий terraform/main/ запускает terraform plan и terraform apply автоматически.
 
 Секреты репозитория:
 
-- `YC_SA_KEY` — JSON ключ сервисного аккаунта в base64
-- `YC_CLOUD_ID` — ID облака
-- `YC_FOLDER_ID` — ID каталога
-- `AWS_ACCESS_KEY_ID` — из bootstrap outputs
-- `AWS_SECRET_ACCESS_KEY` — из bootstrap outputs
-- `DB_PASSWORD` — пароль базы данных
+- YC_SA_KEY — JSON ключ сервисного аккаунта в base64
+- YC_CLOUD_ID — ID облака
+- YC_FOLDER_ID — ID каталога
+- AWS_ACCESS_KEY_ID — из bootstrap outputs
+- AWS_SECRET_ACCESS_KEY — из bootstrap outputs
+- DB_PASSWORD — пароль базы данных
 
 ## Что создаётся в Yandex Cloud
 
