@@ -77,6 +77,19 @@ echo "=== Обновляем K8s манифесты ==="
 sed -i "s|cr.yandex/[^/]*/statusboard-api|cr.yandex/$REGISTRY_ID/statusboard-api|g" ~/diploma/k8s-config/app/api/deployment.yaml
 sed -i "s|cr.yandex/[^/]*/statusboard-frontend|cr.yandex/$REGISTRY_ID/statusboard-frontend|g" ~/diploma/k8s-config/app/frontend/deployment.yaml
 
+echo "=== Проверяем наличие образов в registry ==="
+IMAGE_COUNT=$(yc container image list --registry-id $REGISTRY_ID --format json | jq '. | length')
+if [ "$IMAGE_COUNT" -eq 0 ]; then
+  echo "Образов нет — запускаем CI pipeline..."
+  curl -s -X POST \
+    -H "Authorization: token $GITHUB_TOKEN" \
+    -H "Accept: application/vnd.github.v3+json" \
+    "https://api.github.com/repos/$GITHUB_REPO/actions/workflows/ci.yaml/dispatches" \
+    -d '{"ref":"main"}'
+  echo "CI запущен. Ожидаем сборку образов (3 минуты)..."
+  sleep 180
+fi
+
 echo "=== Применяем K8s манифесты ==="
 kubectl apply -f ~/diploma/k8s-config/namespaces/
 kubectl apply -f ~/diploma/k8s-config/app/api/
