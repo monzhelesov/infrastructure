@@ -26,6 +26,9 @@ REGISTRY_ID=$(terraform output -raw registry_id)
 echo "=== Получаем kubeconfig ==="
 yc managed-kubernetes cluster get-credentials $CLUSTER_ID --external --force
 
+echo "=== Ждём готовности нод ==="
+kubectl wait --for=condition=Ready nodes --all --timeout=300s
+
 echo "=== Создаём статический kubeconfig для GitHub Actions ==="
 kubectl create serviceaccount github-actions -n kube-system --dry-run=client -o yaml | kubectl apply -f -
 kubectl create clusterrolebinding github-actions --clusterrole=cluster-admin --serviceaccount=kube-system:github-actions --dry-run=client -o yaml | kubectl apply -f -
@@ -95,24 +98,13 @@ kubectl apply -f ~/diploma/k8s-config/namespaces/
 kubectl apply -f ~/diploma/k8s-config/app/api/
 kubectl apply -f ~/diploma/k8s-config/app/frontend/
 
-echo "=== Устанавливаем мониторинг ==="
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+echo "=== Устанавливаем ingress ==="
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
 helm repo update
-
 helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   --namespace ingress-nginx \
   --create-namespace \
   --set controller.service.type=LoadBalancer
-
-helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
-  --namespace monitoring \
-  --set grafana.service.type=ClusterIP \
-  --set grafana.adminPassword=admin123 \
-  --set grafana.grafana\\.ini.server.domain=$(kubectl get svc ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending") \
-  --set grafana.grafana\\.ini.server.root_url="%(protocol)s://%(domain)s/grafana/" \
-  --set grafana.grafana\\.ini.server.serve_from_sub_path=true \
-  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
 
 echo "=== Ждём IP ingress контроллера ==="
 for i in $(seq 1 30); do
@@ -124,6 +116,18 @@ for i in $(seq 1 30); do
   echo "Ожидание... ($i/30)"
   sleep 10
 done
+
+echo "=== Устанавливаем мониторинг ==="
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts 2>/dev/null || true
+helm repo update
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+  --namespace monitoring \
+  --set grafana.service.type=ClusterIP \
+  --set grafana.adminPassword=admin123 \
+  --set grafana.grafana\\.ini.server.domain=$IP \
+  --set grafana.grafana\\.ini.server.root_url="%(protocol)s://%(domain)s/grafana/" \
+  --set grafana.grafana\\.ini.server.serve_from_sub_path=true \
+  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
 
 echo "=== Применяем Ingress манифесты ==="
 kubectl apply -f ~/diploma/k8s-config/ingress/
