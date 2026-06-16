@@ -2,7 +2,7 @@
 set -e
 
 source "$(dirname "$0")/.env"
-GITHUB_REPO="monzhelesov/statusboard-app"
+GITHUB_REPO="${GITHUB_REPO:-monzhelesov/statusboard-app}"
 
 echo "=== Обновляем токен ==="
 TOKEN=$(yc iam create-token)
@@ -74,8 +74,6 @@ curl -s -X PUT \
   "https://api.github.com/repos/$GITHUB_REPO/actions/secrets/YC_REGISTRY_ID" \
   -d "{\"encrypted_value\":\"$(echo -n $REGISTRY_ID | base64 -w 0)\",\"key_id\":\"$KEY_ID\"}"
 
-echo "Registry ID: $REGISTRY_ID"
-
 echo "=== Обновляем K8s манифесты ==="
 sed -i "s|cr.yandex/[^/]*/statusboard-api|cr.yandex/$REGISTRY_ID/statusboard-api|g" ~/diploma/k8s-config/app/api/deployment.yaml
 sed -i "s|cr.yandex/[^/]*/statusboard-frontend|cr.yandex/$REGISTRY_ID/statusboard-frontend|g" ~/diploma/k8s-config/app/frontend/deployment.yaml
@@ -97,6 +95,8 @@ echo "=== Применяем K8s манифесты ==="
 kubectl apply -f ~/diploma/k8s-config/namespaces/
 kubectl apply -f ~/diploma/k8s-config/app/api/
 kubectl apply -f ~/diploma/k8s-config/app/frontend/
+kubectl apply -f ~/diploma/k8s-config/rbac/
+kubectl apply -f ~/diploma/k8s-config/monitoring/grafana-secret.yaml
 
 echo "=== Устанавливаем ingress ==="
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx 2>/dev/null || true
@@ -123,7 +123,7 @@ helm repo update
 helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
   --namespace monitoring \
   --set grafana.service.type=ClusterIP \
-  --set grafana.adminPassword=admin123 \
+  --set grafana.admin.existingSecret=grafana-admin-secret \
   --set grafana.grafana\\.ini.server.domain=$IP \
   --set grafana.grafana\\.ini.server.root_url="%(protocol)s://%(domain)s/grafana/" \
   --set grafana.grafana\\.ini.server.serve_from_sub_path=true \
@@ -132,14 +132,19 @@ helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
 echo "=== Применяем Ingress манифесты ==="
 kubectl apply -f ~/diploma/k8s-config/ingress/
 
+echo ""
 echo "=== Готово! ==="
 echo "Приложение: http://$IP"
 echo "Grafana:    http://$IP/grafana"
-echo "Логин Grafana: admin / admin123"
-
 echo ""
-echo "=================================================="
-echo "ВАЖНО: обнови секрет YC_REGISTRY_ID в GitHub:"
-echo "https://github.com/monzhelesov/statusboard-app/settings/secrets/actions"
-echo "Значение: $REGISTRY_ID"
-echo "=================================================="
+echo "Что нужно сделать вручную:"
+echo ""
+echo "1. Обнови секрет YC_REGISTRY_ID в GitHub репозитории с приложением:"
+echo "   Зайди: GitHub репо → Settings → Secrets and variables → Actions"
+echo "   Найди секрет YC_REGISTRY_ID и обнови значение на: $REGISTRY_ID"
+echo ""
+echo "2. Если это первый запуск и образов ещё не было в registry —"
+echo "   запусти CI pipeline вручную в GitHub Actions чтобы собрать образы,"
+echo "   затем перезапусти поды:"
+echo "   kubectl rollout restart deployment/api -n statusboard"
+echo "   kubectl rollout restart deployment/frontend -n statusboard"
