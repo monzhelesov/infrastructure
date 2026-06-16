@@ -43,9 +43,10 @@ resource "yandex_iam_service_account_static_access_key" "terraform_key" {
 }
 
 resource "yandex_storage_bucket" "terraform_state" {
-  bucket     = "statusboard-tf-state-rm"
-  access_key = yandex_iam_service_account_static_access_key.terraform_key.access_key
-  secret_key = yandex_iam_service_account_static_access_key.terraform_key.secret_key
+  bucket        = "statusboard-tf-state-rm"
+  access_key    = yandex_iam_service_account_static_access_key.terraform_key.access_key
+  secret_key    = yandex_iam_service_account_static_access_key.terraform_key.secret_key
+  force_destroy = true
 
   versioning {
     enabled = true

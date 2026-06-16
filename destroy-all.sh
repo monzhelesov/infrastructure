@@ -52,6 +52,9 @@ if [ -n "$OBJECTS" ]; then
     echo "Удалён объект: $key"
   done
 fi
+yc storage bucket delete --name $BUCKET --force 2>/dev/null || \
+  yc storage bucket update --name $BUCKET --versioning-status VERSIONING_DISABLED 2>/dev/null && \
+  yc storage bucket delete --name $BUCKET 2>/dev/null || true
 
 echo "=== Удаляем bootstrap инфраструктуру ==="
 cd ../backend
