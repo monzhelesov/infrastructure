@@ -34,24 +34,28 @@
 Bootstrap создаёт S3 bucket для хранения Terraform state и сервисный аккаунт.
 Эти ресурсы живут постоянно — никогда не удаляй их.
 
-    cp terraform/backend/terraform.tfvars.example terraform/backend/terraform.tfvars
+```bash
+cp terraform/backend/terraform.tfvars.example terraform/backend/terraform.tfvars
+```
 
 Заполни terraform/backend/terraform.tfvars:
 - cloud_id   — ID облака. Узнать: yc config list
 - folder_id  — ID каталога. Узнать: yc config list
 - token      — IAM токен. Получить: yc iam create-token
 
-    cd terraform/backend
-
-    terraform init
-
-    terraform apply
+```bash
+cd terraform/backend
+terraform init
+terraform apply
+```
 
 Сохрани значения из outputs — они нужны в следующих шагах:
 
-    terraform output access_key
-    terraform output secret_key
-    terraform output service_account_id
+```bash
+terraform output access_key
+terraform output secret_key
+terraform output service_account_id
+```
 
 ### Шаг 2 — Настройка основной конфигурации
 
