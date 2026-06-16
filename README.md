@@ -42,7 +42,9 @@ Bootstrap создаёт S3 bucket для хранения Terraform state и с
 - token      — IAM токен. Получить: yc iam create-token
 
     cd terraform/backend
+
     terraform init
+
     terraform apply
 
 Сохрани значения из outputs — они нужны в следующих шагах:
